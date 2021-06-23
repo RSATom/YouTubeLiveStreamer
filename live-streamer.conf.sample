@@ -1,0 +1,5 @@
+source: "rtsp://ipcam.stream:8554/bars"
+
+#youtube-stream-key: "xxxx-xxxx-xxxx-xxxx-xxxx"
+
+log-level: 3

@@ -1,0 +1,3 @@
+#!/bin/sh -e
+
+cp "$SNAP/opt/$SNAP_NAME/etc/live-streamer.conf.sample" "$SNAP_COMMON/live-streamer.conf"
