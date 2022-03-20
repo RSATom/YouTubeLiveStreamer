@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
     std::deque<ReStreamContext> contexts;
 
     for(const Config::ReStreamer& reStreamer: config.reStreamers) {
-        ReStreamContext& context = contexts.emplace_back();
+        ReStreamContext& context = *contexts.emplace(contexts.end());
 
         StartRestream(reStreamer, &context);
     }
