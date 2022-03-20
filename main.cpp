@@ -46,14 +46,6 @@ static bool LoadConfig(Config* config)
             return false;
         }
 
-        const char* source = nullptr;
-        if(CONFIG_TRUE == config_lookup_string(&config, "source", &source)) {
-            loadedConfig.source = source;
-        }
-        const char* key = nullptr;
-        if(CONFIG_TRUE == config_lookup_string(&config, "youtube-stream-key", &key)) {
-            loadedConfig.youTubeStreamKey = key;
-        }
         int logLevel = 0;
         if(CONFIG_TRUE == config_lookup_int(&config, "log-level", &logLevel)) {
             if(logLevel > 0) {
@@ -62,17 +54,42 @@ static bool LoadConfig(Config* config)
                         spdlog::level::critical - std::min<int>(logLevel, spdlog::level::critical));
             }
         }
+
+        const char* source = nullptr;
+        config_lookup_string(&config, "source", &source);
+        const char* key = nullptr;
+        config_lookup_string(&config, "youtube-stream-key", &key);
+
+        if(source && key) {
+            loadedConfig.reStreamers.emplace_back(Config::ReStreamer{ source, key });
+        }
+
+        config_setting_t* streamersConfig = config_lookup(&config, "streamers");
+        if(streamersConfig && CONFIG_TRUE == config_setting_is_list(streamersConfig)) {
+            const int streamersCount = config_setting_length(streamersConfig);
+            for(int streamerIdx = 0; streamerIdx < streamersCount; ++streamerIdx) {
+                config_setting_t* streamerConfig =
+                    config_setting_get_elem(streamersConfig, streamerIdx);
+                if(!streamerConfig || CONFIG_FALSE == config_setting_is_group(streamerConfig)) {
+                    Log()->warn("Wrong streamer config format. Streamer skipped.");
+                    break;
+                }
+
+                const char* source = nullptr;
+                config_setting_lookup_string(streamerConfig, "source", &source);
+                const char* key = nullptr;
+                config_setting_lookup_string(streamerConfig, "youtube-stream-key", &key);
+
+                if(source && key) {
+                    loadedConfig.reStreamers.emplace_back(Config::ReStreamer{ source, key });
+                }
+            }
+        }
     }
 
     bool success = true;
-
-    if(loadedConfig.source.empty()) {
-        Log()->error("Missing source");
-        success = false;
-    }
-
-    if(loadedConfig.youTubeStreamKey.empty()) {
-        Log()->error("Missing key");
+    if(loadedConfig.reStreamers.empty()) {
+        Log()->error("No streamers configured");
         success = false;
     }
 
@@ -82,53 +99,60 @@ static bool LoadConfig(Config* config)
     return success;
 }
 
-struct Context {
+struct ReStreamContext {
     std::unique_ptr<ReStreamer> reStreamer;
 };
 
-void StopReStream(Context* context)
+void StopReStream(ReStreamContext* context)
 {
     context->reStreamer.reset();
 }
 
-void ScheduleStartRestreawm(const Config&, Context*);
+void ScheduleStartRestreawm(const Config::ReStreamer&, ReStreamContext*);
 
-void StartRestream(const Config& config, Context* context)
+void StartRestream(const Config::ReStreamer& reStreamer, ReStreamContext* context)
 {
     StopReStream(context);
 
-    Log()->info("Restreaming \"{}\"", config.source);
+    Log()->info("Restreaming \"{}\"", reStreamer.source);
 
     context->reStreamer =
         std::make_unique<ReStreamer>(
-            config.source,
-            "rtmp://a.rtmp.youtube.com/live2/" + config.youTubeStreamKey,
-            [&config, context] () {
-                ScheduleStartRestreawm(config, context);
+            reStreamer.source,
+            "rtmp://a.rtmp.youtube.com/live2/" + reStreamer.youTubeStreamKey,
+            [&reStreamer, context] () {
+                ScheduleStartRestreawm(reStreamer, context);
             });
 
     context->reStreamer->start();
 }
 
-void ScheduleStartRestreawm(const Config& config, Context* context)
+void ScheduleStartRestreawm(const Config::ReStreamer& reStreamer, ReStreamContext* context)
 {
-    Log()->info("Restreaming restart pending...");
+    Log()->info("ReStreaming restart pending...");
 
     auto reconnect =
         [] (gpointer userData) -> gboolean {
              auto* data =
-                reinterpret_cast<std::tuple<const Config&, Context*>*>(userData);
+                reinterpret_cast<std::tuple<const Config::ReStreamer&, ReStreamContext*>*>(userData);
 
              StartRestream(std::get<0>(*data), std::get<1>(*data));
-
-             delete data;
 
              return false;
         };
 
-    auto* data = new std::tuple<const Config&, Context*>(config, context);
+    auto* data = new std::tuple<const Config::ReStreamer&, ReStreamContext*>(reStreamer, context);
 
-    g_timeout_add_seconds(RECONNECT_INTERVAL, GSourceFunc(reconnect), data);
+    g_timeout_add_seconds_full(
+        G_PRIORITY_DEFAULT,
+        RECONNECT_INTERVAL,
+        GSourceFunc(reconnect),
+        data,
+        [] (gpointer userData) {
+             auto* data =
+                reinterpret_cast<std::tuple<const Config::ReStreamer&, ReStreamContext*>*>(userData);
+             delete data;
+        });
 }
 
 int main(int argc, char *argv[])
@@ -142,9 +166,13 @@ int main(int argc, char *argv[])
     GMainLoopPtr loopPtr(g_main_loop_new(nullptr, FALSE));
     GMainLoop* loop = loopPtr.get();
 
-    Context context;
+    std::deque<ReStreamContext> contexts;
 
-    StartRestream(config, &context);
+    for(const Config::ReStreamer& reStreamer: config.reStreamers) {
+        ReStreamContext& context = contexts.emplace_back();
+
+        StartRestream(reStreamer, &context);
+    }
 
     g_main_loop_run(loop);
 

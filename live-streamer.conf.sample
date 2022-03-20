@@ -1,5 +1,16 @@
-source: "rtsp://ipcam.stream:8554/bars"
-
-#youtube-stream-key: "xxxx-xxxx-xxxx-xxxx-xxxx"
+streamers: (
+  {
+    source: "rtsp://ipcam.stream:8554/white",
+#    youtube-stream-key: "xxxx-xxxx-xxxx-xxxx-xxxx"
+  },
+  {
+    source: "rtsp://ipcam.stream:8554/blue",
+#    youtube-stream-key: "xxxx-xxxx-xxxx-xxxx-xxxx"
+  },
+  {
+    source: "rtsp://ipcam.stream:8554/red",
+#    youtube-stream-key: "xxxx-xxxx-xxxx-xxxx-xxxx"
+  }
+)
 
 log-level: 3
