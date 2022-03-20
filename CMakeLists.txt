@@ -21,7 +21,8 @@ file(GLOB SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     *.cpp
     *.h,
     *.cmake,
-    *.conf.sample)
+    *.conf.sample
+    README.md)
 
 file(GLOB_RECURSE SNAP RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     snap/*)
