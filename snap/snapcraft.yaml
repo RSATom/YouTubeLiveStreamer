@@ -19,7 +19,7 @@ description: |
   * Look to the logs with `sudo snap logs youtube-live-streamer` or `sudo snap logs youtube-live-streamer -f`
   * Create issue on https://github.com/RSATom/YouTubeLiveStreamer/issues
 license: GPL-3.0
-grade: devel
+grade: stable
 confinement: strict
 
 architectures:
